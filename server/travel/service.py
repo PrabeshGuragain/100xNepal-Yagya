@@ -48,24 +48,26 @@ class TravelPlanningService:
             
             prompt_template = get_itinerary_prompt_template(format_instructions)
             
-            # Prepare prompt variables from flexible request
+            # Prepare prompt variables from request - matching new schema
             destination_text = f"Destination: {request.destination}"
-            origin_text = f"Origin: {request.origin}" if request.origin else "Origin: not specified"
-            days_text = f"Days: {request.days}" if request.days else "Days: not specified"
-            travel_type_text = f"Travel Type: {request.travel_type}" if request.travel_type else "Travel Type: not specified"
-            budget_text = f"Budget: {request.budget}" if request.budget else "Budget: not specified"
-            preferences_text = f"Preferences: {request.preferences}" if request.preferences else "Preferences: not specified"
-            date_text = f"Date: {request.date}" if request.date else "Date: not specified"
+            duration_text = f"Duration: {request.duration} days"
+            start_date_text = f"Start Date: {request.start_date}" if request.start_date else "Start Date: not specified"
+            difficulty_text = f"Difficulty Level: {request.difficulty_level}" if request.difficulty_level else "Difficulty Level: not specified"
+            budget_text = f"Budget Range: {request.budget_range}" if request.budget_range else "Budget Range: not specified"
+            interests_text = f"Interests: {request.interests}" if request.interests else "Interests: not specified"
+            group_size_text = f"Group Size: {request.group_size} people"
+            accommodation_text = f"Accommodation Type: {request.accommodation_type}" if request.accommodation_type else "Accommodation Type: not specified"
             
             # Create final prompt
             final_prompt = prompt_template.format(
                 destination=destination_text,
-                origin=origin_text,
-                days=days_text,
-                travel_type=travel_type_text,
-                budget=budget_text,
-                preferences=preferences_text,
-                date=date_text
+                duration=duration_text,
+                start_date=start_date_text,
+                difficulty_level=difficulty_text,
+                budget_range=budget_text,
+                interests=interests_text,
+                group_size=group_size_text,
+                accommodation_type=accommodation_text
             )
             
             # Add agent's research findings to the prompt
@@ -76,7 +78,14 @@ Research Findings from Agent:
 {agent_output}
 
 Based on the research findings above and the user requirements, generate a comprehensive itinerary report in the exact JSON format specified in the format instructions.
-Make sure to use the information gathered from the tools to create accurate and detailed plans.
+Make sure to:
+1. Create exactly {request.duration} day plans
+2. Match activities to the {request.difficulty_level or 'moderate'} difficulty level
+3. Keep recommendations within the {request.budget_range or 'moderate'} budget range
+4. Focus on interests: {request.interests or 'general tourism'}
+5. Ensure activities are suitable for a group of {request.group_size}
+6. Recommend {request.accommodation_type or 'various'} accommodation types
+7. Use the information gathered from the tools to create accurate and detailed plans
 """
             
             # Get structured output from LLM
@@ -115,60 +124,69 @@ Make sure to use the information gathered from the tools to create accurate and 
     
     def _prepare_agent_input(self, request: TravelPlanRequest) -> str:
         """
-        Prepare input string for the agent - Flexible input handling
+        Prepare input string for the agent - matching new frontend schema
         
         Args:
-            request: TravelPlanRequest (flexible schema)
+            request: TravelPlanRequest with new schema
             
         Returns:
             Formatted input string
         """
-        # Extract values - handle any format from frontend
+        # Extract values from new schema
         destination = request.destination
-        days = request.days or "not specified"
-        origin = request.origin or "not specified"
-        travel_type = request.travel_type or "not specified"
-        budget = request.budget or "not specified"
-        preferences = request.preferences or "not specified"
-        date = request.date or "not specified"
+        duration = request.duration
+        start_date = request.start_date or "not specified"
+        difficulty_level = request.difficulty_level or "moderate"
+        budget_range = request.budget_range or "moderate"
+        interests = request.interests or "general sightseeing"
+        group_size = request.group_size or 1
+        accommodation_type = request.accommodation_type or "mixed"
         notes = request.notes or ""
         
-        # Build flexible input text
-        input_parts = [f"Plan a trip to {destination}"]
+        # Build structured input text
+        input_text = f"""Plan a {duration}-day trip to {destination}
+
+Trip Details:
+- Duration: {duration} days
+- Start Date: {start_date}
+- Difficulty Level: {difficulty_level}
+- Budget Range: {budget_range}
+- Interests: {interests}
+- Group Size: {group_size} people
+- Accommodation Preference: {accommodation_type}
+"""
         
-        if days != "not specified":
-            input_parts.append(f"for {days} days")
-        if origin != "not specified":
-            input_parts.append(f"from {origin}")
-        if travel_type != "not specified":
-            input_parts.append(f"Type: {travel_type}")
-        if budget != "not specified":
-            input_parts.append(f"Budget: {budget}")
-        if preferences != "not specified":
-            input_parts.append(f"Interests: {preferences}")
-        if date != "not specified":
-            input_parts.append(f"Date: {date}")
         if notes:
-            input_parts.append(f"Notes: {notes}")
-        
-        input_text = "\n".join(input_parts)
+            input_text += f"- Additional Notes: {notes}\n"
         
         input_text += f"""
-
 Research Requirements:
-1. Search for top attractions, activities, and places in {destination}
-2. Get ratings and reviews for recommended places  
-3. Compare prices for accommodations, food, and activities
-4. Rank attractions by category based on reviews
-5. Get weather information if available
-6. Get local customs and cultural tips
-7. Try to find image URLs from search results for places and attractions
+1. Search for top attractions and activities in {destination} that match interests: {interests}
+2. Find places suitable for groups of {group_size} people
+3. Get ratings and reviews for recommended places
+4. Find {accommodation_type} accommodation options within {budget_range} budget range
+5. Research activities matching {difficulty_level} difficulty level
+6. Compare prices for accommodations, food, and activities in the {budget_range} range
+7. Get weather information"""
+        
+        if start_date != "not specified":
+            input_text += f" for {start_date}"
+        
+        input_text += f"""
+8. Get local customs and cultural tips for {destination}
+9. Research transportation options suitable for {group_size} travelers
+10. Find image URLs from search results for:
+    - Destination cover image
+    - Attraction/location images matching interests ({interests})
+    - Activity images suitable for {difficulty_level} level
+    - {accommodation_type} accommodation images
 
-IMPORTANT: When searching, look for image URLs in the search results that can be used for:
-- Destination cover image
-- Attraction/location images
-- Activity images
-- Accommodation images
+IMPORTANT: 
+- Focus on activities and places that align with: {interests}
+- Ensure all recommendations fit the {budget_range} budget range
+- Activities should match {difficulty_level} difficulty level
+- Consider group size of {group_size} for all recommendations
+- Prioritize {accommodation_type} accommodation types
 
 Use all available tools to gather comprehensive information about {destination}.
 """
@@ -326,8 +344,8 @@ Use all available tools to gather comprehensive information about {destination}.
             md_parts.append("## Weather Information\n\n")
             md_parts.append(f"{itinerary.weather_info}\n\n")
         
-        # Best Time to Visit (already in details, but can repeat if needed)
-        if itinerary.best_time_to_visit and itinerary.best_time_to_visit not in md_parts[-50:]:
+        # Best Time to Visit
+        if itinerary.best_time_to_visit:
             md_parts.append("## Best Time to Visit\n\n")
             md_parts.append(f"{itinerary.best_time_to_visit}\n\n")
         
@@ -399,4 +417,3 @@ Use all available tools to gather comprehensive information about {destination}.
 
 # Singleton instance
 travel_service = TravelPlanningService()
-

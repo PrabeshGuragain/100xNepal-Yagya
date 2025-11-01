@@ -19,35 +19,38 @@ class TravelType(str, Enum):
 
 
 class TravelPlanRequest(BaseModel):
-    """Request schema for travel planning - Flexible input with placeholders"""
-    # Simple required fields
-    destination: str = Field(..., description="Destination (city, country, or any text)")
-    days: Optional[int] = Field(None, description="Number of days (optional)")
+    """Request schema for travel planning - matches frontend form fields"""
     
-    # Optional flexible fields - accept any string values
-    origin: Optional[str] = Field(None, description="Origin location (optional)")
-    travel_type: Optional[str] = Field(None, description="Type of travel (any string)")
-    budget: Optional[str] = Field(None, description="Budget information (any format)")
-    preferences: Optional[str] = Field(None, description="Preferences or requirements (any text)")
-    date: Optional[str] = Field(None, description="Date information (any format)")
-    notes: Optional[str] = Field(None, description="Additional notes or requirements")
+    # Required fields
+    destination: str = Field(..., description="Destination location (city, country, region)")
+    duration: int = Field(..., description="Number of days for the trip", gt=0)
     
-    # Allow any additional fields
+    # Optional fields matching frontend
+    start_date: Optional[str] = Field(None, description="Start date of the trip (YYYY-MM-DD format or flexible)")
+    difficulty_level: Optional[str] = Field(None, description="Difficulty level: easy, moderate, challenging, extreme")
+    budget_range: Optional[str] = Field(None, description="Budget range: budget, moderate, luxury, or custom amount")
+    interests: Optional[str] = Field(None, description="Comma-separated interests: temples, trains, rivers, hiking, food, culture, etc.")
+    group_size: Optional[int] = Field(1, description="Number of people traveling", gt=0)
+    accommodation_type: Optional[str] = Field(None, description="Preferred accommodation: hotel, guest house, hostel, mixed, camping, etc.")
+    
+    # Additional optional fields
+    notes: Optional[str] = Field(None, description="Additional notes or special requirements")
+    
     class Config:
-        extra = "allow"  # Allow extra fields from frontend
+        extra = "allow"  # Allow extra fields from frontend for flexibility
         json_schema_extra = {
             "example": {
-                "destination": "Paris, France",
-                "days": 5,
-                "origin": "New York",
-                "travel_type": "cultural tour",
-                "budget": "medium budget around $2000",
-                "preferences": "museums, food, historic sites",
-                "date": "June 2024",
-                "notes": "First time visiting, prefer walking tours"
+                "destination": "Pokhara, Nepal",
+                "duration": 5,
+                "start_date": "2025-12-15",
+                "difficulty_level": "moderate",
+                "budget_range": "moderate",
+                "interests": "temples, hiking, lakes, food",
+                "group_size": 2,
+                "accommodation_type": "hotel",
+                "notes": "Prefer mountain views"
             }
         }
-
 
 class Location(BaseModel):
     """Location information"""

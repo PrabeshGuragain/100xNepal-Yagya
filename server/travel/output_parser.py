@@ -131,60 +131,78 @@ class TravelItineraryParser:
             return text[start:end+1]
         
         return None
-
-
 def get_itinerary_prompt_template(format_instructions: str) -> PromptTemplate:
     """Get the prompt template for itinerary generation"""
-    template = """You are an expert travel planner AI assistant. Create a comprehensive travel itinerary.
+    template = """You are an expert travel planner AI assistant. Create a comprehensive, personalized travel itinerary based on the user's specific requirements.
 
 User Requirements:
-{destination}
-{origin}
-{days}
-{travel_type}
-{budget}
-{preferences}
-{date}
+Destination: {destination}
+Duration: {duration} days
+Start Date: {start_date}
+Difficulty Level: {difficulty_level}
+Budget Range: {budget_range}
+Interests: {interests}
+Group Size: {group_size} people
+Accommodation Type: {accommodation_type}
 
 Instructions:
-1. Create detailed day-by-day itinerary with specific activities
-2. Include times, locations, and costs for each activity
-3. Provide ratings and reviews for all recommended places
-4. Include image URLs when available from search results
-5. Add accommodation recommendations with details
-6. Include transportation tips and local information
-7. Provide cultural tips and best practices
+1. Create a detailed day-by-day itinerary tailored to the specified difficulty level and interests
+2. Ensure activities match the group size and are appropriate for the number of travelers
+3. Recommend activities and places that align with the user's interests ({interests})
+4. Keep all recommendations within the specified budget range ({budget_range})
+5. Suggest accommodations matching the preferred type ({accommodation_type})
+6. Include specific times, locations, and cost estimates for each activity
+7. Provide ratings and reviews for all recommended places
+8. Include image URLs when available from search results
+9. Add transportation tips considering the group size
+10. Provide cultural tips and best practices for the destination
+11. Adjust the itinerary pace based on difficulty level (easy = relaxed, challenging = packed schedule)
 
 IMPORTANT OUTPUT REQUIREMENTS:
-- day_plans: REQUIRED - Must have at least one day plan with:
-  - day_number: Sequential day number
+- day_plans: REQUIRED - Must have exactly {duration} day plans with:
+  - day_number: Sequential day number (1 to {duration})
   - title: Descriptive title for the day
-  - description: Overview of the day
+  - description: Overview of the day's activities
   - activities: List of activities, each with:
     - name: Activity name
-    - description: Detailed description
+    - description: Detailed description matching user interests
     - location: Location object with name, address, rating, image_url, latitude, longitude
-    - start_time and end_time: Time slots
-    - cost_estimate: Estimated cost
+    - start_time and end_time: Time slots (adjust pace based on difficulty level)
+    - cost_estimate: Estimated cost within budget range
     - image_url: Image URL if found from search
+    - difficulty: Activity difficulty level
 
-- top_attractions: List of top places with:
+- top_attractions: List of top places matching user interests with:
   - name, address, rating, review_count, latitude, longitude
   - image_url: Image URL from search results
-  - category: Type of attraction
+  - category: Type of attraction (should align with interests: {interests})
+  - suitable_for_group_size: Boolean indicating if suitable for the group
 
 - must_visit_places: List with:
   - name, address, rating, latitude, longitude
   - image_url: Image URL if available
 
-- accommodation_recommendations: List with:
-  - name, type, location, price_range, rating
-  - image_url: Image URL if available
+- accommodation_recommendations: List matching accommodation type preference ({accommodation_type}) with:
+  - name, type (hotel/guest house/hostel/etc.), location
+  - price_range: Within specified budget range ({budget_range})
+  - rating, image_url
   - amenities: List of amenities
+  - group_capacity: Maximum guests it can accommodate
+
+- budget_breakdown: Estimated costs breakdown:
+  - accommodation_cost: Total for {duration} days
+  - activities_cost: Total for all activities
+  - transportation_cost: Estimated transport costs
+  - food_cost: Estimated daily food costs
+  - total_estimate: Overall trip cost
 
 - Include destination_image and cover_image URLs if found
-- Include weather_info and cultural_notes
-- Provide detailed general_tips and transportation_tips
+- Include weather_info (especially relevant for start date: {start_date})
+- Include cultural_notes relevant to the destination
+- Provide detailed general_tips considering group size ({group_size}) and interests ({interests})
+- Provide transportation_tips for moving the group around
+- Include difficulty_notes explaining the physical demands of the itinerary
+- Add group_travel_tips for managing a group of {group_size} people
 
 CRITICAL RULES:
 1. For all locations, places, and attractions, you MUST include latitude and longitude coordinates.
@@ -193,23 +211,35 @@ CRITICAL RULES:
 2. ALL RATINGS MUST BE ON A 0-5 SCALE (not 0-10). If you find ratings on a 0-10 scale, divide by 2.
    Example: If a place has 8.9/10 rating, convert it to 4.5/5.
 
+3. Create exactly {duration} day plans - one for each day of the trip.
+
+4. Ensure all activities match the {difficulty_level} difficulty level:
+   - easy: Relaxed pace, light activities, plenty of rest time
+   - moderate: Balanced mix of activities and rest
+   - challenging: Packed schedule, physically demanding activities
+   - extreme: Very demanding, for experienced travelers only
+
+5. All costs must fit within the {budget_range} budget range.
+
+6. Focus on activities and attractions related to: {interests}
+
 Output Format:
 {format_instructions}
 
-Generate the itinerary in valid JSON format matching the schema exactly.
+Generate the itinerary in valid JSON format matching the schema exactly. Ensure the itinerary is cohesive, practical, and tailored to all specified requirements.
 """
     
     return PromptTemplate(
         template=template,
         input_variables=[
             "destination",
-            "origin",
-            "days",
-            "travel_type",
-            "budget",
-            "preferences",
-            "date"
+            "duration",
+            "start_date",
+            "difficulty_level",
+            "budget_range",
+            "interests",
+            "group_size",
+            "accommodation_type"
         ],
         partial_variables={"format_instructions": format_instructions}
     )
-
