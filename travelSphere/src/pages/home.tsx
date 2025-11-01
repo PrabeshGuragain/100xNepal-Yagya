@@ -599,8 +599,22 @@ const TourismItineraryMaker = () => {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">Tourism Itinerary Maker</h1>
           <p className="text-gray-600">Plan your perfect journey with AI-powered recommendations</p>
+          <button
+            onClick={() => window.location.href = '/ar-location-map'}
+            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            View Map
+          </button>
           
+          
+<button
+            onClick={() => window.location.href = '/add-place'}
+            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Add place
+          </button>
         </div>
+      
 
         <ProgressIndicator />
 
