@@ -3,7 +3,6 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
-// Fix Leaflet default marker icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
@@ -22,17 +21,48 @@ interface ArLocation {
   lng: number;
 }
 
+const fallbackLocations: ArLocation[] = [
+  {
+    id: 1,
+    name: "Location 1",
+    description: "AR Experience Point 1",
+    type: "AR Marker",
+    lat: 27.7263058,
+    lng: 85.3560134
+  },
+  {
+    id: 2,
+    name: "Location 2",
+    description: "AR Experience Point 2",
+    type: "AR Marker",
+    lat: 27.7263058,
+    lng: 85.3559119
+  },
+  {
+    id: 3,
+    name: "Location 3",
+    description: "AR Experience Point 3",
+    type: "AR Marker",
+    lat: 27.7263957,
+    lng: 85.3559119
+  }
+];
+
 const ArLocationMap: React.FC = () => {
-  const [locations, setLocations] = useState<ArLocation[]>([]);
+  const [locations, setLocations] = useState<ArLocation[]>(fallbackLocations);
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
     fetch("http://127.0.0.1:8000/ar-locations/locations")
       .then((res) => res.json())
-      .then((data: ArLocation[]) => setLocations(data))
+      .then((data: ArLocation[]) => {
+        if (data && data.length > 0) {
+          setLocations(data);
+        }
+      })
       .catch((err) => {
         console.error("Error fetching locations:", err);
-        setError("Failed to load locations");
+        setError("Using fallback locations");
       });
   }, []);
 
@@ -41,7 +71,7 @@ const ArLocationMap: React.FC = () => {
   return (
     <div style={{ height: "100vh", width: "100%" }}>
       {error && (
-        <div style={{ padding: "10px", background: "#fee", color: "#c00" }}>
+        <div style={{ padding: "10px", background: "#fff3cd", color: "#856404" }}>
           {error}
         </div>
       )}

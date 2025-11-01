@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    body { margin: 0; }
+    #loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      z-index: 999;
+    }
+    #audio-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      z-index: 999;
+      display: none;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    #audio-btn:active {
+      background: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading AR...</div>
+  <button id="audio-btn">🔊</button>
+
+  <a-scene 
+    mindar-image="imageTargetSrc: ./targets/targets.mind; maxTrack: 3; autoStart: true;" 
+    color-space="sRGB" 
+    renderer="colorManagement: true, physicallyCorrectLights" 
+    vr-mode-ui="enabled: false" 
+    device-orientation-permission-ui="enabled: false">
+    
+    <a-assets>
+      <!-- Preload 3D models here if needed -->
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <!-- Target entities will be generated here -->
+    <a-entity id="target-container"></a-entity>
+  </a-scene>
+
+  <script>
+    let locations = [];
+    let currentLocation = null;
+    const audioBtn = document.getElementById('audio-btn');
+
+    // Text-to-speech function
+    function speakText(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.9;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    // Audio button click handler
+    audioBtn.addEventListener('click', () => {
+      if (currentLocation) {
+        const text = `${currentLocation.name}. ${currentLocation.description}`;
+        speakText(text);
+      }
+    });
+
+    // Load location data
+    fetch('./data/locations.json')
+      .then(res => res.json())
+      .then(data => {
+        locations = data.locations;
+        createTargets();
+      });
+
+    function createTargets() {
+      const container = document.getElementById('target-container');
+      
+      locations.forEach(loc => {
+        const entity = document.createElement('a-entity');
+        entity.setAttribute('mindar-image-target', `targetIndex: ${loc.id}`);
+        
+        if (loc.type === 'info') {
+          createInfoCard(entity, loc);
+        } else if (loc.type === 'model') {
+          createModel(entity, loc);
+        }
+        
+        container.appendChild(entity);
+
+        entity.addEventListener('targetFound', () => {
+          console.log(`Found: ${loc.name}`);
+          currentLocation = loc;
+          audioBtn.style.display = 'block';
+        });
+        
+        entity.addEventListener('targetLost', () => {
+          console.log(`Lost: ${loc.name}`);
+          if (currentLocation && currentLocation.id === loc.id) {
+            currentLocation = null;
+            audioBtn.style.display = 'none';
+            window.speechSynthesis.cancel();
+          }
+        });
+      });
+    }
+
+    function createInfoCard(entity, loc) {
+      // Truncate description to fit
+      const maxLength = 80;
+      let displayDesc = loc.description;
+      if (displayDesc.length > maxLength) {
+        displayDesc = displayDesc.substring(0, maxLength) + '...';
+      }
+
+      // Background plane - made taller
+      const bg = document.createElement('a-plane');
+      bg.setAttribute('color', '#ffffff');
+      bg.setAttribute('opacity', '0.9');
+      bg.setAttribute('position', '0 0 0');
+      bg.setAttribute('height', '0.5');
+      bg.setAttribute('width', '1');
+      
+      // Title text
+      const title = document.createElement('a-text');
+      title.setAttribute('value', loc.name);
+      title.setAttribute('color', '#000000');
+      title.setAttribute('align', 'center');
+      title.setAttribute('width', '1.7');
+      title.setAttribute('position', '0 0.15 0.01');
+      
+      // Description text - adjusted wrapping
+      const desc = document.createElement('a-text');
+      desc.setAttribute('value', displayDesc);
+      desc.setAttribute('color', '#333333');
+      desc.setAttribute('align', 'center');
+      desc.setAttribute('width', '1.5');
+      desc.setAttribute('wrap-count', '30');
+      desc.setAttribute('position', '0 -0.05 0.01');
+      
+      entity.appendChild(bg);
+      entity.appendChild(title);
+      entity.appendChild(desc);
+    }
+
+    function createModel(entity, loc) {
+      // Create 3D model
+      const model = document.createElement('a-gltf-model');
+      model.setAttribute('src', loc.modelUrl);
+      model.setAttribute('scale', loc.modelScale || '0.1 0.1 0.1');
+      model.setAttribute('position', '0 0 0.1');
+      model.setAttribute('rotation', '0 0 0');
+      model.setAttribute('animation-mixer', '');
+      
+      // Info card below the model
+      const bg = document.createElement('a-plane');
+      bg.setAttribute('color', '#ffffff');
+      bg.setAttribute('opacity', '0.8');
+      bg.setAttribute('position', '0 -0.3 0');
+      bg.setAttribute('height', '0.15');
+      bg.setAttribute('width', '1');
+      
+      const title = document.createElement('a-text');
+      title.setAttribute('value', loc.name);
+      title.setAttribute('color', '#000000');
+      title.setAttribute('align', 'center');
+      title.setAttribute('width', '1.7');
+      title.setAttribute('position', '0 -0.3 0.01');
+      
+      entity.appendChild(model);
+      entity.appendChild(bg);
+      entity.appendChild(title);
+    }
+
+    // Hide loading screen when AR is ready
+    document.querySelector('a-scene').addEventListener('arReady', () => {
+      document.getElementById('loading').style.display = 'none';
+    });
+  </script>
+</body>
+</html>

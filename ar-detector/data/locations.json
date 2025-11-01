@@ -1,0 +1,31 @@
+{
+  "locations": [
+    {
+    "id": 0,
+    "name": "Muktinath Temple",
+    "description": "Sacred temple for both Hindus and Buddhists, located in Mustang district at the foot of the Thorong La pass",
+    "type": "info",
+  "lat": 27.7263058,
+  "lng": 85.3560134
+  },
+    {
+      "id": 1,
+      "name": "Boudhanath Stupa",
+      "description": "One of the largest Buddhist stupas in Nepal",
+      "type": "model",
+      "modelUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMan/glTF/CesiumMan.gltf",
+      "modelScale": "0.5 0.5 0.5",
+      "lat": 27.7263058,
+      "lng": 85.3559119
+    },
+    
+    {
+      "id": 2,
+      "name": "Local Momo Shop",
+      "description": "Best momos in town! Family run since 1995",
+      "type": "info",
+    "lat": 27.7263957,
+  "lng": 85.3559119
+    }
+  ]
+}
