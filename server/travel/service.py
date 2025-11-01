@@ -1,0 +1,336 @@
+"""Travel planning service with LangChain agent"""
+from travel.schemas import TravelPlanRequest, ItineraryReport, TravelPlanResponse
+from travel.agent import create_itinerary_agent_with_parser, get_gemini_llm
+from travel.output_parser import get_itinerary_prompt_template
+import time
+from typing import Optional
+import json
+
+
+class TravelPlanningService:
+    """Service for generating travel itineraries using LangChain agent"""
+    
+    def __init__(self):
+        self.agent_executor = None
+        self.parser = None
+    
+    def _initialize_agent(self):
+        """Lazy initialization of agent"""
+        if self.agent_executor is None or self.parser is None:
+            self.agent_executor, self.parser = create_itinerary_agent_with_parser()
+    
+    async def generate_itinerary(self, request: TravelPlanRequest) -> TravelPlanResponse:
+        """
+        Generate travel itinerary using LangChain agent
+        
+        Args:
+            request: TravelPlanRequest with user requirements
+            
+        Returns:
+            TravelPlanResponse with generated itinerary
+        """
+        start_time = time.time()
+        
+        try:
+            # Initialize agent if needed
+            self._initialize_agent()
+            
+            # Prepare input for the agent
+            agent_input = self._prepare_agent_input(request)
+            
+            # Execute agent to gather information
+            agent_result = self.agent_executor.invoke({"input": agent_input})
+            agent_output = agent_result.get("output", "")
+            
+            # Prepare final prompt with gathered information
+            llm = get_gemini_llm()
+            format_instructions = self.parser.get_format_instructions()
+            
+            prompt_template = get_itinerary_prompt_template(format_instructions)
+            
+            # Prepare prompt variables from flexible request
+            destination_text = f"Destination: {request.destination}"
+            origin_text = f"Origin: {request.origin}" if request.origin else "Origin: not specified"
+            days_text = f"Days: {request.days}" if request.days else "Days: not specified"
+            travel_type_text = f"Travel Type: {request.travel_type}" if request.travel_type else "Travel Type: not specified"
+            budget_text = f"Budget: {request.budget}" if request.budget else "Budget: not specified"
+            preferences_text = f"Preferences: {request.preferences}" if request.preferences else "Preferences: not specified"
+            date_text = f"Date: {request.date}" if request.date else "Date: not specified"
+            
+            # Create final prompt
+            final_prompt = prompt_template.format(
+                destination=destination_text,
+                origin=origin_text,
+                days=days_text,
+                travel_type=travel_type_text,
+                budget=budget_text,
+                preferences=preferences_text,
+                date=date_text
+            )
+            
+            # Add agent's research findings to the prompt
+            enhanced_prompt = f"""
+{final_prompt}
+
+Research Findings from Agent:
+{agent_output}
+
+Based on the research findings above and the user requirements, generate a comprehensive itinerary report in the exact JSON format specified in the format instructions.
+Make sure to use the information gathered from the tools to create accurate and detailed plans.
+"""
+            
+            # Get structured output from LLM
+            response = await llm.ainvoke(enhanced_prompt)
+            llm_output = response.content
+            
+            # Parse the output
+            itinerary = self.parser.parse(llm_output)
+            
+            # Generate markdown description using rule-based method
+            itinerary.markdown_description = self._generate_markdown_description(itinerary)
+            
+            # Enhance itinerary with metadata
+            itinerary.created_at = time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            processing_time = time.time() - start_time
+            
+            return TravelPlanResponse(
+                success=True,
+                itinerary=itinerary,
+                message="Itinerary generated successfully",
+                processing_time=round(processing_time, 2)
+            )
+            
+        except Exception as e:
+            processing_time = time.time() - start_time
+            return TravelPlanResponse(
+                success=False,
+                itinerary=None,
+                message=f"Error generating itinerary: {str(e)}",
+                processing_time=round(processing_time, 2)
+            )
+    
+    def _prepare_agent_input(self, request: TravelPlanRequest) -> str:
+        """
+        Prepare input string for the agent - Flexible input handling
+        
+        Args:
+            request: TravelPlanRequest (flexible schema)
+            
+        Returns:
+            Formatted input string
+        """
+        # Extract values - handle any format from frontend
+        destination = request.destination
+        days = request.days or "not specified"
+        origin = request.origin or "not specified"
+        travel_type = request.travel_type or "not specified"
+        budget = request.budget or "not specified"
+        preferences = request.preferences or "not specified"
+        date = request.date or "not specified"
+        notes = request.notes or ""
+        
+        # Build flexible input text
+        input_parts = [f"Plan a trip to {destination}"]
+        
+        if days != "not specified":
+            input_parts.append(f"for {days} days")
+        if origin != "not specified":
+            input_parts.append(f"from {origin}")
+        if travel_type != "not specified":
+            input_parts.append(f"Type: {travel_type}")
+        if budget != "not specified":
+            input_parts.append(f"Budget: {budget}")
+        if preferences != "not specified":
+            input_parts.append(f"Interests: {preferences}")
+        if date != "not specified":
+            input_parts.append(f"Date: {date}")
+        if notes:
+            input_parts.append(f"Notes: {notes}")
+        
+        input_text = "\n".join(input_parts)
+        
+        input_text += f"""
+
+Research Requirements:
+1. Search for top attractions, activities, and places in {destination}
+2. Get ratings and reviews for recommended places  
+3. Compare prices for accommodations, food, and activities
+4. Rank attractions by category based on reviews
+5. Get weather information if available
+6. Get local customs and cultural tips
+7. Try to find image URLs from search results for places and attractions
+
+IMPORTANT: When searching, look for image URLs in the search results that can be used for:
+- Destination cover image
+- Attraction/location images
+- Activity images
+- Accommodation images
+
+Use all available tools to gather comprehensive information about {destination}.
+"""
+        
+        return input_text.strip()
+    
+    def _generate_markdown_description(self, itinerary: ItineraryReport) -> str:
+        """
+        Generate markdown description from itinerary using rule-based approach
+        
+        Args:
+            itinerary: ItineraryReport object
+            
+        Returns:
+            Formatted markdown string
+        """
+        md_parts = []
+        
+        # Title
+        md_parts.append(f"# {itinerary.destination} Travel Itinerary\n")
+        
+        # Overview section
+        md_parts.append("## Overview\n")
+        md_parts.append(f"{itinerary.summary}\n")
+        md_parts.append("\n---\n")
+        
+        # Travel Details
+        md_parts.append("## Travel Details\n")
+        md_parts.append(f"- **Duration:** {itinerary.total_days} days\n")
+        if itinerary.travel_type:
+            md_parts.append(f"- **Travel Type:** {itinerary.travel_type}\n")
+        if itinerary.budget_estimate:
+            md_parts.append(f"- **Estimated Budget:** {itinerary.budget_estimate}\n")
+        if itinerary.best_time_to_visit:
+            md_parts.append(f"- **Best Time to Visit:** {itinerary.best_time_to_visit}\n")
+        md_parts.append("\n")
+        
+        # Day Plans
+        if itinerary.day_plans:
+            md_parts.append("## Day-by-Day Itinerary\n\n")
+            for day_plan in itinerary.day_plans:
+                md_parts.append(f"### Day {day_plan.day_number}: {day_plan.title}\n\n")
+                if day_plan.description:
+                    md_parts.append(f"*{day_plan.description}*\n\n")
+                
+                if day_plan.activities:
+                    md_parts.append("#### Activities\n\n")
+                    for i, activity in enumerate(day_plan.activities, 1):
+                        md_parts.append(f"**{i}. {activity.name}**\n\n")
+                        if activity.description:
+                            md_parts.append(f"{activity.description}\n\n")
+                        if activity.location:
+                            md_parts.append(f"- **Location:** {activity.location.name}")
+                            if activity.location.address:
+                                md_parts.append(f" ({activity.location.address})")
+                            if activity.location.rating:
+                                md_parts.append(f" ⭐ {activity.location.rating}/5")
+                            md_parts.append("\n")
+                        if activity.start_time and activity.end_time:
+                            md_parts.append(f"- **Time:** {activity.start_time} - {activity.end_time}\n")
+                        if activity.cost_estimate:
+                            md_parts.append(f"- **Cost:** {activity.cost_estimate}\n")
+                        if activity.tips:
+                            md_parts.append(f"- **Tips:** {', '.join(activity.tips)}\n")
+                        md_parts.append("\n")
+                
+                if day_plan.highlights:
+                    md_parts.append(f"**Highlights:** {', '.join(day_plan.highlights)}\n\n")
+                if day_plan.estimated_cost:
+                    md_parts.append(f"**Estimated Cost:** {day_plan.estimated_cost}\n\n")
+                if day_plan.notes:
+                    md_parts.append(f"*Note: {day_plan.notes}*\n\n")
+                md_parts.append("---\n\n")
+        
+        # Top Attractions
+        if itinerary.top_attractions:
+            md_parts.append("## Top Attractions\n\n")
+            for i, attraction in enumerate(itinerary.top_attractions[:10], 1):
+                md_parts.append(f"{i}. **{attraction.name}**")
+                if attraction.rating:
+                    md_parts.append(f" ⭐ {attraction.rating}/5")
+                if attraction.address:
+                    md_parts.append(f"\n   - {attraction.address}")
+                if attraction.category:
+                    md_parts.append(f"\n   - Category: {attraction.category}")
+                md_parts.append("\n\n")
+        
+        # Must Visit Places
+        if itinerary.must_visit_places:
+            md_parts.append("## Must-Visit Places\n\n")
+            for place in itinerary.must_visit_places[:10]:
+                md_parts.append(f"- **{place.name}**")
+                if place.rating:
+                    md_parts.append(f" ⭐ {place.rating}/5")
+                md_parts.append("\n")
+            md_parts.append("\n")
+        
+        # Accommodation Recommendations
+        if itinerary.accommodation_recommendations:
+            md_parts.append("## Accommodation Recommendations\n\n")
+            for acc in itinerary.accommodation_recommendations:
+                md_parts.append(f"### {acc.name}\n\n")
+                md_parts.append(f"- **Type:** {acc.type or 'Not specified'}\n")
+                if acc.location:
+                    md_parts.append(f"- **Location:** {acc.location}\n")
+                if acc.price_range:
+                    md_parts.append(f"- **Price Range:** {acc.price_range}\n")
+                if acc.rating:
+                    md_parts.append(f"- **Rating:** ⭐ {acc.rating}/5")
+                    if acc.review_count:
+                        md_parts.append(f" ({acc.review_count} reviews)")
+                    md_parts.append("\n")
+                if acc.recommendation_reason:
+                    md_parts.append(f"- **Why:** {acc.recommendation_reason}\n")
+                if acc.amenities:
+                    md_parts.append(f"- **Amenities:** {', '.join(acc.amenities)}\n")
+                md_parts.append("\n")
+        
+        # Transportation Tips
+        if itinerary.transportation_tips:
+            md_parts.append("## Transportation\n\n")
+            for transport in itinerary.transportation_tips:
+                md_parts.append(f"### {transport.type}\n\n")
+                if transport.route:
+                    md_parts.append(f"- **Route:** {transport.route}\n")
+                if transport.estimated_cost:
+                    md_parts.append(f"- **Cost:** {transport.estimated_cost}\n")
+                if transport.duration:
+                    md_parts.append(f"- **Duration:** {transport.duration}\n")
+                if transport.tips:
+                    md_parts.append("**Tips:**\n")
+                    for tip in transport.tips:
+                        md_parts.append(f"- {tip}\n")
+                md_parts.append("\n")
+        
+        if itinerary.local_transport:
+            md_parts.append(f"### Local Transportation\n\n{itinerary.local_transport}\n\n")
+        
+        # General Tips
+        if itinerary.general_tips:
+            md_parts.append("## General Travel Tips\n\n")
+            for tip in itinerary.general_tips:
+                md_parts.append(f"- {tip}\n")
+            md_parts.append("\n")
+        
+        # Cultural Notes
+        if itinerary.cultural_notes:
+            md_parts.append("## Cultural Information\n\n")
+            for note in itinerary.cultural_notes:
+                md_parts.append(f"- {note}\n")
+            md_parts.append("\n")
+        
+        # Weather Info
+        if itinerary.weather_info:
+            md_parts.append("## Weather Information\n\n")
+            md_parts.append(f"{itinerary.weather_info}\n\n")
+        
+        # Best Time to Visit (already in details, but can repeat if needed)
+        if itinerary.best_time_to_visit and itinerary.best_time_to_visit not in md_parts[-50:]:
+            md_parts.append("## Best Time to Visit\n\n")
+            md_parts.append(f"{itinerary.best_time_to_visit}\n\n")
+        
+        return "".join(md_parts)
+
+
+# Singleton instance
+travel_service = TravelPlanningService()
+

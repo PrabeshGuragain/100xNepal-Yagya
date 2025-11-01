@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # CORS settings
     CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8000", "http://localhost:5173", "https://qqp5w08x-5173.inc1.devtunnels.ms/"]
     
+    # Google Gemini API
+    GOOGLE_API_KEY: Optional[str] = None
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

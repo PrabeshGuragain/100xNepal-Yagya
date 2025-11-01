@@ -17,4 +17,10 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "requests>=2.31.0",
     "pydantic[email]>=2.12.3",
+    "langchain>=0.1.0",
+    "langchain-google-genai>=1.0.0",
+    "langchain-community>=0.0.20",
+    "langchain-core>=0.1.0",
+    "ddgs>=0.1.0",
+    "beautifulsoup4>=4.12.0",
 ]

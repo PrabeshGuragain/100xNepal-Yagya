@@ -5,6 +5,7 @@ from core.config import settings
 from db.database import init_db
 from auth.router import router as auth_router
 from ArLocation.router import router as ar_location_router
+from travel.router import router as travel_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -18,6 +19,7 @@ app = FastAPI(
     - 🔗 Google OAuth Integration
     - 👤 User Management
     - 🔒 JWT Token-based Authorization
+    - ✈️ AI-Powered Travel Planning with LangChain & Gemini
     
     ### Authentication:
     All protected endpoints require a Bearer token in the Authorization header.
@@ -48,6 +50,10 @@ app = FastAPI(
         {
             "name": "ar-locations",
             "description": "AR Location endpoints.",
+        },
+        {
+            "name": "travel-planning",
+            "description": "AI-powered travel itinerary planning with tool calling capabilities.",
         },
     ],
 )
@@ -92,6 +98,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router)
 app.include_router(ar_location_router)
+app.include_router(travel_router)
 
 # Initialize database on startup
 @app.on_event("startup")
