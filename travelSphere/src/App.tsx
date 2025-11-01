@@ -4,6 +4,7 @@ import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 import Home from './pages/home'
+import ArLocationMap from './pages/ArLocationMap.tsx'
 
 
 function NotFound() {
@@ -23,6 +24,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/ar-location-map" element={<ArLocationMap />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
