@@ -95,7 +95,7 @@ const ArLocationMap: React.FC = () => {
               Type: {loc.type}
               <br />
               <button
-                onClick={() => window.location.href = `https://qqp5w08x-5500.inc1.devtunnels.ms/`}
+                onClick={() => window.location.href = `https://qqp5w08x-5501.inc1.devtunnels.ms/`}
                 style={{
                   marginTop: "8px",
                   padding: "8px 16px",
