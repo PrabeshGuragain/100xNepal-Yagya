@@ -1,5 +1,11 @@
-import React, { useState, useRef } from 'react';
-import { MapPin, Calendar, Clock, DollarSign, Mountain, Users, Hotel, Plane, Bus, Utensils, Camera, FileText, Download, ChevronRight, ChevronLeft, CheckCircle, Loader } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { MapPin, FileText, Download, ChevronRight, ChevronLeft, Loader } from 'lucide-react';
+
+declare global {
+  interface Window {
+    gsap?: any;
+  }
+}
 
 type FormDataType = {
   destination: string;
@@ -16,7 +22,6 @@ type FormDataType = {
   transportation: string;
 };
 
-// Location details for some notable places
 const LOCATION_DETAILS: Record<string, any> = {
   muktinath: {
     title: 'Muktinath, Mustang, Nepal',
@@ -57,25 +62,23 @@ const LOCATION_DETAILS: Record<string, any> = {
   },
   mustang: {
     title: 'Mustang District, Nepal',
-    location: 'Mustang is a remote, high-altitude district in northern Nepal, bordering Tibet. It includes the Upper Mustang region (formerly a restricted kingdom).',
+    location: 'Mustang is a remote, high-altitude district in northern Nepal, bordering Tibet.',
     highlights: [
       'Dramatic arid landscapes and canyon-like valleys',
       'Traditional Tibetan-influenced culture and architecture',
-      'Gateway to Muktinath and key trekking routes (Annapurna Circuit segments)'
-    ],
-    notes: 'Upper Mustang requires a permit for visitors; best visited in spring and autumn. Altitudes vary widely; be prepared for cold and high-altitude conditions.'
+      'Gateway to Muktinath and key trekking routes'
+    ]
   },
   nepal: {
     title: 'Nepal',
-    location: 'Nepal is a Himalayan country in South Asia, home to diverse landscapes from subtropical plains to the world’s highest mountains.',
+    location: 'Nepal is a Himalayan country in South Asia, home to diverse landscapes.',
     highlights: [
-      'Home to eight of the world’s ten highest peaks, including Mount Everest',
+      'Home to eight of the world\'s ten highest peaks, including Mount Everest',
       'Rich cultural and religious heritage (Hinduism and Buddhism)',
       'Popular trekking regions: Annapurna, Everest, Langtang, Manaslu'
-    ],
-    travelTips: 'Acclimatize when traveling to high-altitude regions, carry appropriate permits for restricted areas, and check seasonal weather patterns before planning travel.'
+    ]
   }
-}
+};
 
 const TourismItineraryMaker = () => {
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -97,7 +100,137 @@ const TourismItineraryMaker = () => {
   const [itinerary, setItinerary] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [showReport, setShowReport] = useState<boolean>(false);
+  const [isAnimating, setIsAnimating] = useState<boolean>(false);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const printRef = useRef<HTMLDivElement | null>(null);
+
+  // Background images (rotating slideshow)
+  const BG_IMAGES = [
+    'https://images.unsplash.com/photo-1580424917967-a8867a6e676e?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=2340',
+    'https://images.unsplash.com/photo-1602102488252-c4c3daadf1c2?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=2348',
+    'https://images.unsplash.com/photo-1544442069-97dded965a9f?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=2831'
+  ];
+  const [bgIndex, setBgIndex] = useState<number>(0);
+  const [cardFading, setCardFading] = useState<boolean>(false);
+
+  // Change background image according to current form step
+  useEffect(() => {
+    // Keep current image until the new one is fully loaded, then cross-fade.
+    const newIndex = (currentStep - 1) % BG_IMAGES.length;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let mounted = true;
+
+    const img = new Image();
+    img.src = BG_IMAGES[newIndex];
+    img.onload = () => {
+      if (!mounted) return;
+      // start fade (fade out current)
+      setCardFading(true);
+      // after fade, swap background and fade in
+      timeoutId = setTimeout(() => {
+        setBgIndex(newIndex);
+        setCardFading(false);
+      }, 260);
+    };
+
+    // If image fails to load quickly, still swap after a short delay to avoid blocking forever
+    const fallback = setTimeout(() => {
+      if (!mounted) return;
+      // attempt swap even if onload didn't fire
+      if (!timeoutId) {
+        setCardFading(true);
+        timeoutId = setTimeout(() => {
+          setBgIndex(newIndex);
+          setCardFading(false);
+        }, 260);
+      }
+    }, 3000);
+
+    return () => {
+      mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
+      clearTimeout(fallback);
+      img.onload = null;
+    };
+  }, [currentStep]);
+
+  useEffect(() => {
+    // Load GSAP from CDN
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+const animateStepTransition = (direction: 'next' | 'prev') => {
+    if (!contentRef.current || isAnimating) return;
+    
+    setIsAnimating(true);
+    const content = contentRef.current;
+    
+    // Check if GSAP is loaded
+    if (typeof window.gsap !== 'undefined') {
+        const gsap = window.gsap;
+        
+        if (direction === 'next') {
+            // Slide current content up and fade out, then bring new content up from bottom
+            gsap.to(content, {
+                opacity: 0,
+                y: -50,
+                duration: 0.3,
+                ease: 'power2.in',
+                onComplete: () => {
+                    setCurrentStep(prev => Math.min(3, prev + 1));
+                    gsap.fromTo(
+                        content,
+                        { opacity: 0, y: 50 },
+                        { 
+                            opacity: 1, 
+                            y: 0, 
+                            duration: 0.4, 
+                            ease: 'power2.out',
+                            onComplete: () => setIsAnimating(false)
+                        }
+                    );
+                }
+            });
+        } else {
+            // Slide current content down and fade out, then bring new content down from top
+            gsap.to(content, {
+                opacity: 0,
+                y: 50,
+                duration: 0.3,
+                ease: 'power2.in',
+                onComplete: () => {
+                    setCurrentStep(prev => Math.max(1, prev - 1));
+                    gsap.fromTo(
+                        content,
+                        { opacity: 0, y: -50 },
+                        { 
+                            opacity: 1, 
+                            y: 0, 
+                            duration: 0.4, 
+                            ease: 'power2.out',
+                            onComplete: () => setIsAnimating(false)
+                        }
+                    );
+                }
+            });
+        }
+    } else {
+        // Fallback without GSAP (instant switch)
+        if (direction === 'next') {
+            setCurrentStep(prev => Math.min(3, prev + 1));
+        } else {
+            setCurrentStep(prev => Math.max(1, prev - 1));
+        }
+        setIsAnimating(false);
+    }
+};
 
   function handleInputChange<K extends keyof FormDataType>(field: K, value: FormDataType[K]) {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -130,7 +263,6 @@ const TourismItineraryMaker = () => {
     
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Try to attach location-specific details if we have them
     const lookupLocationDetails = (name: string) => {
       const n = (name || '').toLowerCase();
       if (n.includes('muktinath')) return LOCATION_DETAILS.muktinath;
@@ -221,8 +353,7 @@ const TourismItineraryMaker = () => {
       map: {
         route: ['Kathmandu → Airport → ' + formData.destination + ' → City Center → Heritage Sites → Mountain Areas → Return'],
         coordinates: '27.7172° N, 85.3240° E'
-      }
-      ,
+      },
       locationDetails: locationDetails
     };
     
@@ -235,45 +366,29 @@ const TourismItineraryMaker = () => {
     window.print();
   };
 
-  const ProgressIndicator = () => (
-    <div className="flex items-center justify-center mb-8">
-      {[1, 2, 3].map(step => (
-        <React.Fragment key={step}>
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-            currentStep >= step ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-600'
-          }`}>
-            {currentStep > step ? <CheckCircle size={20} /> : step}
-          </div>
-          {step < 3 && (
-            <div className={`w-24 h-1 ${currentStep > step ? 'bg-blue-600' : 'bg-gray-300'}`} />
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  );
 
   if (showReport && itinerary) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-5xl mx-auto p-6">
-          <div className="no-print mb-6 flex justify-between items-center">
+        <div className="p-6">
+            <div className="no-print mb-6 flex justify-between items-center">
             <button
               onClick={() => setShowReport(false)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              className="flex items-center bg-black gap-2 px-4 py-2 text-white rounded-lg transition-colors"
             >
               <ChevronLeft size={20} />
               Back to Form
             </button>
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
             >
               <Download size={20} />
               Print Report
             </button>
           </div>
 
-          <div ref={printRef} className="bg-white rounded-lg shadow-lg p-8 print:shadow-none">
+          <div ref={printRef} className=" p-8 print:shadow-none">
             <div className="text-center mb-8 border-b pb-6">
               <h1 className="text-4xl font-bold text-gray-800 mb-2">{itinerary.destination} Travel Itinerary</h1>
               <p className="text-xl text-gray-600">{itinerary.duration} Days Journey</p>
@@ -288,290 +403,30 @@ const TourismItineraryMaker = () => {
                 {itinerary.locationDetails.altitude && (
                   <p className="text-sm text-gray-700 mb-2"><strong>Altitude:</strong> {itinerary.locationDetails.altitude}</p>
                 )}
-                {itinerary.locationDetails.religiousSignificance && (
-                  <div className="mb-2">
-                    <p className="font-semibold">Religious Significance</p>
-                    <div className="text-sm text-gray-700">
-                      {itinerary.locationDetails.religiousSignificance.hindu && (
-                        <div className="mb-1">
-                          <p className="font-medium">Hindu:</p>
-                          <p>{itinerary.locationDetails.religiousSignificance.hindu.name} — {itinerary.locationDetails.religiousSignificance.hindu.deity}</p>
-                          <ul className="list-disc list-inside mt-1">
-                            {itinerary.locationDetails.religiousSignificance.hindu.notes.map((n: string, i: number) => (
-                              <li key={i}>{n}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {itinerary.locationDetails.religiousSignificance.buddhist && (
-                        <div>
-                          <p className="font-medium">Buddhist:</p>
-                          <p>{itinerary.locationDetails.religiousSignificance.buddhist.name} — {itinerary.locationDetails.religiousSignificance.buddhist.worship}</p>
-                          <ul className="list-disc list-inside mt-1">
-                            {itinerary.locationDetails.religiousSignificance.buddhist.notes.map((n: string, i: number) => (
-                              <li key={i}>{n}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {itinerary.locationDetails.keyFeatures && (
-                  <div className="mb-2">
-                    <p className="font-semibold">Key Features</p>
-                    <ul className="list-disc list-inside text-sm text-gray-700 mt-1">
-                      {itinerary.locationDetails.keyFeatures.map((f: string, i: number) => (
-                        <li key={i}>{f}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {itinerary.locationDetails.howToReach && (
-                  <div className="mb-2">
-                    <p className="font-semibold">How to Reach</p>
-                    <ul className="list-disc list-inside text-sm text-gray-700 mt-1">
-                      {itinerary.locationDetails.howToReach.map((s: string, i: number) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {itinerary.locationDetails.bestTimeToVisit && (
-                  <p className="text-sm text-gray-700"><strong>Best Time to Visit:</strong> {itinerary.locationDetails.bestTimeToVisit}</p>
-                )}
-                {itinerary.locationDetails.avoidSeasons && (
-                  <p className="text-sm text-gray-700 mt-1"><strong>Seasons to Avoid:</strong> {itinerary.locationDetails.avoidSeasons}</p>
-                )}
               </div>
             )}
 
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <MapPin className="text-blue-600" />
+                <MapPin className="text-emerald-600" />
                 Trip Overview
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="bg-emerald-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600">Duration</p>
                   <p className="text-lg font-semibold">{itinerary.duration} Days</p>
                 </div>
-                <div className="bg-green-50 p-4 rounded-lg">
+                <div className="bg-emerald-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600">Distance</p>
                   <p className="text-lg font-semibold">{itinerary.overview.totalDistance}</p>
                 </div>
-                <div className="bg-yellow-50 p-4 rounded-lg">
+                <div className="bg-emerald-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600">Difficulty</p>
                   <p className="text-lg font-semibold capitalize">{itinerary.overview.difficulty}</p>
                 </div>
-                <div className="bg-purple-50 p-4 rounded-lg">
+                <div className="bg-emerald-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600">Budget</p>
                   <p className="text-lg font-semibold capitalize">{itinerary.overview.budget}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Plane className="text-blue-600" />
-                Transportation Options
-              </h2>
-              <div className="space-y-3">
-                {itinerary.transportation.toDestination.map((transport: { type: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; from: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; to: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; price: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; duration: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; }, idx: React.Key | null | undefined) => (
-                  <div key={idx} className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
-                    <div className="flex items-center gap-4">
-                      {transport.type === 'flight' ? <Plane size={24} /> : <Bus size={24} />}
-                      <div>
-                        <p className="font-semibold capitalize">{transport.type}</p>
-                        <p className="text-sm text-gray-600">{transport.from} → {transport.to}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold">{transport.price}</p>
-                      <p className="text-sm text-gray-600">{transport.duration}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Hotel className="text-blue-600" />
-                Recommended Accommodation
-              </h2>
-              <div className="space-y-3">
-                {itinerary.accommodation.map((hotel: { name: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; type: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; location: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; price: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; rating: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; }, idx: React.Key | null | undefined) => (
-                  <div key={idx} className="bg-gray-50 p-4 rounded-lg">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-semibold text-lg">{hotel.name}</p>
-                        <p className="text-sm text-gray-600 capitalize">{hotel.type} • {hotel.location}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-blue-600">{hotel.price}</p>
-                        <p className="text-sm text-yellow-600">★ {hotel.rating}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Calendar className="text-blue-600" />
-                Day-by-Day Itinerary
-              </h2>
-              {itinerary.dailyPlan.map((day: { day: boolean | React.Key | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; title: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; schedule: any[]; highlights: any[]; distance: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; overnight: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; }) => (
-                <div key={`day-${day.day}`} className="mb-6 border-l-4 border-blue-600 pl-6 break-inside-avoid">
-                  <h3 className="text-xl font-bold text-gray-800 mb-3">Day {day.day}: {day.title}</h3>
-                  
-                  <div className="space-y-2 mb-4">
-                    {day.schedule.map((item: { time: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; activity: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; location: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; duration: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; description: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; cost: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; }, idx: React.Key | null | undefined) => (
-                      <div key={idx} className="flex gap-4 bg-gray-50 p-3 rounded">
-                        <div className="flex items-center gap-2 min-w-fit">
-                          <Clock size={16} className="text-blue-600" />
-                          <span className="font-semibold text-sm">{item.time}</span>
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-semibold">{item.activity}</p>
-                          <p className="text-sm text-gray-600">{item.location} • {item.duration}</p>
-                          {item.description && <p className="text-sm text-gray-500 mt-1">{item.description}</p>}
-                          {item.cost && <p className="text-sm text-green-600 mt-1">Cost: {item.cost}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="bg-blue-50 p-4 rounded-lg mb-3">
-                    <p className="font-semibold mb-2">Highlights:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      {day.highlights.map((highlight: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined, idx: React.Key | null | undefined) => (
-                        <li key={idx} className="text-sm text-gray-700">{highlight}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="flex gap-4 text-sm">
-                    <p><strong>Distance:</strong> {day.distance}</p>
-                    <p><strong>Overnight:</strong> {day.overnight}</p>
-                    <p><strong>Meals:</strong> B/L/D included</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Camera className="text-blue-600" />
-                Important Places to Visit
-              </h2>
-              {itinerary.importantPlaces.map((place: { name: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; type: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; significance: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; history: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; visitDuration: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; entryFee: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; tips: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined; }, idx: React.Key | null | undefined) => (
-                <div key={idx} className="bg-gray-50 p-6 rounded-lg mb-4 break-inside-avoid">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">{place.name}</h3>
-                  <p className="text-sm text-blue-600 mb-3">{place.type} • {place.significance}</p>
-                  <p className="text-gray-700 mb-3">{place.history}</p>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-600">Visit Duration</p>
-                      <p className="font-semibold">{place.visitDuration}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Entry Fee</p>
-                      <p className="font-semibold">{place.entryFee}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 bg-yellow-50 p-3 rounded">
-                    <p className="text-sm"><strong>Tips:</strong> {place.tips}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mb-8 break-inside-avoid">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <MapPin className="text-blue-600" />
-                Route Map
-              </h2>
-              <div className="bg-gray-100 p-6 rounded-lg">
-                <div className="text-center mb-4">
-                  <p className="text-sm text-gray-600">Coordinates: {itinerary.map.coordinates}</p>
-                </div>
-                <div className="flex items-center justify-center gap-2 text-sm flex-wrap">
-                  {itinerary.map.route[0].split(' → ').map((location: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined, idx: React.Key | null | undefined, arr: string | any[]) => (
-                    <React.Fragment key={idx}>
-                      <div className="bg-white px-4 py-2 rounded-full shadow">
-                        {location}
-                      </div>
-                      {(idx as number) < arr.length - 1 && <ChevronRight className="text-gray-400" />}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <FileText className="text-blue-600" />
-                Travel Essentials
-              </h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-blue-50 p-6 rounded-lg">
-                  <h3 className="font-bold mb-3">Packing List</h3>
-                  <ul className="space-y-2">
-                    {itinerary.essentials.packing.map((item: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined, idx: React.Key | null | undefined) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <CheckCircle size={16} className="text-green-600 mt-1" />
-                        <span className="text-sm">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="bg-green-50 p-6 rounded-lg">
-                  <h3 className="font-bold mb-3">Important Documents</h3>
-                  <ul className="space-y-2">
-                    {itinerary.essentials.documents.map((item: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined, idx: React.Key | null | undefined) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <CheckCircle size={16} className="text-green-600 mt-1" />
-                        <span className="text-sm">{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-8 break-inside-avoid">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <DollarSign className="text-blue-600" />
-                Budget Breakdown
-              </h2>
-              <div className="bg-gradient-to-r from-blue-50 to-green-50 p-6 rounded-lg">
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span>Accommodation</span>
-                    <span className="font-semibold">{itinerary.essentials.budget.accommodation}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Food & Drinks</span>
-                    <span className="font-semibold">{itinerary.essentials.budget.food}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Transportation</span>
-                    <span className="font-semibold">{itinerary.essentials.budget.transportation}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Activities & Entry Fees</span>
-                    <span className="font-semibold">{itinerary.essentials.budget.activities}</span>
-                  </div>
-                  <div className="border-t-2 border-gray-300 pt-3 flex justify-between text-lg">
-                    <span className="font-bold">Total Estimated Cost</span>
-                    <span className="font-bold text-blue-600">{itinerary.essentials.budget.total}</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -594,279 +449,302 @@ const TourismItineraryMaker = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Tourism Itinerary Maker</h1>
-          <p className="text-gray-600">Plan your perfect journey with AI-powered recommendations</p>
+    <div className="min-h-screen w-full h-full relative py-8">
+      {/* full-screen background for current step (covers entire viewport) */}
+      <div
+        aria-hidden
+        className={`absolute inset-0 bg-cover bg-center transition-opacity duration-300 ${cardFading ? 'opacity-0' : 'opacity-100'}`}
+        style={{
+          backgroundImage: `url(${BG_IMAGES[bgIndex]})`
+        }}
+      />
+
+      {/* subtle overlay to improve readability + centered gradient to focus the form */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 bg-black/50" />
+        {/* centered radial gradient to focus the form */}
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ pointerEvents: 'none' }}
+        >
+          <div
+            aria-hidden
+            style={{
+              width: '90%',
+              maxWidth: '1200px',
+              height: '80%',
+              background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,0) 70%)',
+              borderRadius: '24px'
+            }}
+          />
         </div>
+      </div>
 
-        <ProgressIndicator />
+      <div className="relative z-10 flex items-center justify-center min-h-screen px-4">
+      {/* form container (transparent) - background image per-step lives on this card */}
+      <div
+            className={`relative w-full max-w-5xl bg-transparent rounded-xl p-10 overflow-hidden transition-opacity duration-300 ${
+              cardFading ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
+          {/* <div className="text-center mb-8">
+            <h1 className="text-5xl font-bold text-gray-800 mb-2 text-emerald-600">
+              Tourism Itinerary Maker
+            </h1>
+            <p className="text-gray-600 text-lg">Plan your perfect journey with AI-powered recommendations</p>
+          </div> */}
 
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          {currentStep === 1 && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Basic Trip Information</h2>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Destination *
-                </label>
-                <input
-                  type="text"
-                  value={formData.destination}
-                  onChange={(e) => handleInputChange('destination', e.target.value)}
-                  placeholder="e.g., Pokhara, Kathmandu, Chitwan"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+          {/* <ProgressIndicator /> */}
 
-              <div className="grid md:grid-cols-2 gap-4">
+          <div className="p-8 overflow-hidden relative z-10">
+            <div ref={contentRef}>
+            {currentStep === 1 && (
+              <div className="space-y-6">
+                <h2 className="text-3xl font-bold text-white mb-4">Required Information</h2>
+                
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Duration (days) *
+                  <label className="block text-sm font-semibold text-white/90 mb-2">
+                    Destination
                   </label>
                   <input
-                    type="number"
-                    min="1"
-                    max="30"
-                    value={formData.duration}
-                    onChange={(e) => handleInputChange('duration', e.target.value)}
-                    placeholder="e.g., 5"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    type="text"
+                    value={formData.destination}
+                    onChange={(e) => handleInputChange('destination', e.target.value)}
+                    placeholder="e.g., Pokhara, Kathmandu, Muktinath"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Visit Month *
-                  </label>
-                  <select
-                    value={formData.visitMonth}
-                    onChange={(e) => handleInputChange('visitMonth', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select Month</option>
-                    {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(month => (
-                      <option key={month} value={month}>{month}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Start Date (Optional)
-                </label>
-                <input
-                  type="date"
-                  value={formData.startDate}
-                  onChange={(e) => handleInputChange('startDate', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-          )}
-
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Preferences</h2>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Difficulty Level
-                  </label>
-                  <select
-                    value={formData.difficulty}
-                    onChange={(e) => handleInputChange('difficulty', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="easy">Easy</option>
-                    <option value="moderate">Moderate</option>
-                    <option value="challenging">Challenging</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Budget Range
-                  </label>
-                  <select
-                    value={formData.budget}
-                    onChange={(e) => handleInputChange('budget', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="budget">Budget ($-$$)</option>
-                    <option value="moderate">Moderate ($$-$$$)</option>
-                    <option value="luxury">Luxury ($$$-$$$$)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Interests (Select all that apply)
-                </label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {['temples', 'trails', 'rivers', 'mountains', 'culture', 'wildlife', 'photography', 'adventure', 'relaxation'].map(interest => (
-                    <button
-                      key={interest}
-                      onClick={() => handleArrayToggle('interests', interest)}
-                      className={`px-4 py-2 rounded-lg border-2 transition-all ${
-                        formData.interests.includes(interest)
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
-                      }`}
-                    >
-                      {interest.charAt(0).toUpperCase() + interest.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Group Size
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={formData.groupSize}
-                    onChange={(e) => handleInputChange('groupSize', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Accommodation Type
-                  </label>
-                  <select
-                    value={formData.accommodation}
-                    onChange={(e) => handleInputChange('accommodation', e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="hotel">Hotel</option>
-                    <option value="guesthouse">Guesthouse</option>
-                    <option value="resort">Resort</option>
-                    <option value="hostel">Hostel</option>
-                    <option value="mixed">Mixed</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Accessibility Requirements
-                </label>
-                <select
-                  value={formData.accessibility}
-                  onChange={(e) => handleInputChange('accessibility', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="standard">Standard</option>
-                  <option value="wheelchair">Wheelchair Accessible</option>
-                  <option value="elderly">Elderly Friendly</option>
-                  <option value="family">Family with Kids</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Review Your Trip Details</h2>
-              
-              <div className="bg-gray-50 p-6 rounded-lg space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-gray-600">Destination</p>
-                    <p className="font-semibold text-lg">{formData.destination || 'Not specified'}</p>
+                    <label className="block text-sm font-semibold text-white/90 mb-2">
+                      Duration (days)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="30"
+                      value={formData.duration}
+                      onChange={(e) => handleInputChange('duration', e.target.value)}
+                      placeholder="e.g., 5"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                    />
                   </div>
+
                   <div>
-                    <p className="text-sm text-gray-600">Duration</p>
-                    <p className="font-semibold text-lg">{formData.duration || 'Not specified'} days</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Travel Month</p>
-                    <p className="font-semibold text-lg">{formData.visitMonth || 'Not specified'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Start Date</p>
-                    <p className="font-semibold text-lg">{formData.startDate || 'Flexible'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Difficulty</p>
-                    <p className="font-semibold text-lg capitalize">{formData.difficulty}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Budget</p>
-                    <p className="font-semibold text-lg capitalize">{formData.budget}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Group Size</p>
-                    <p className="font-semibold text-lg">{formData.groupSize} people</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">Accommodation</p>
-                    <p className="font-semibold text-lg capitalize">{formData.accommodation}</p>
+                    <label className="block text-sm font-semibold text-white/90 mb-2">
+                      Visit Month
+                    </label>
+                    <select
+                      value={formData.visitMonth}
+                      onChange={(e) => handleInputChange('visitMonth', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                    >
+                      <option value="">Select Month</option>
+                      {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map(month => (
+                        <option key={month} value={month}>{month}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
-                {formData.interests.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-white/90 mb-2">
+                    Start Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.startDate}
+                    onChange={(e) => handleInputChange('startDate', e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                  />
+                </div>
+              </div>
+            )}
+
+            {currentStep === 2 && (
+              <div className="space-y-6">
+                <h2 className="text-3xl font-bold text-white mb-4">Your Preferences</h2>
+
+                <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-gray-600 mb-2">Interests</p>
-                    <div className="flex flex-wrap gap-2">
-                      {formData.interests.map(interest => (
-                        <span key={interest} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-                          {interest.charAt(0).toUpperCase() + interest.slice(1)}
-                        </span>
-                      ))}
+                    <label className="block text-sm font-semibold text-white/90 mb-2">
+                      Difficulty Level
+                    </label>
+                    <select
+                      value={formData.difficulty}
+                      onChange={(e) => handleInputChange('difficulty', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                    >
+                      <option value="easy">Easy</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="challenging">Challenging</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-white/90 mb-2">
+                      Budget Range
+                    </label>
+                    <select
+                      value={formData.budget}
+                      onChange={(e) => handleInputChange('budget', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                    >
+                      <option value="budget">Budget ($-$$)</option>
+                      <option value="moderate">Moderate ($$-$$$)</option>
+                      <option value="luxury">Luxury ($$$-$$$$)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-white/90 mb-3">
+                    Interests (Select all that apply)
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {(() => {
+                        const INTERESTS = ['temples', 'trails', 'rivers', 'mountains', 'culture', 'wildlife', 'photography', 'adventure', 'relaxation'];
+                        const EMOJI: Record<string, string> = {
+                            temples: '🛕',
+                            trails: '🥾',
+                            rivers: '🌊',
+                            mountains: '🏔️',
+                            culture: '🎭',
+                            wildlife: '🦌',
+                            photography: '📸',
+                            adventure: '🧗',
+                            relaxation: '🧘'
+                        };
+                        return INTERESTS.map(interest => (
+                            <button
+                                key={interest}
+                                onClick={() => handleArrayToggle('interests', interest)}
+                className={`px-4 py-2 rounded-lg border-2 transition-all transform  flex items-center justify-center gap-2 ${
+                                    formData.interests.includes(interest)
+                                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg'
+                                        : 'bg-white text-gray-700 border-gray-300 hover:border-emerald-400'
+                                }`}
+                            >
+                                <span aria-hidden>{EMOJI[interest] || '🔹'}</span>
+                                <span>{interest.charAt(0).toUpperCase() + interest.slice(1)}</span>
+                            </button>
+                        ));
+                    })()}
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-white/90 mb-2">
+                      Group Size
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={formData.groupSize}
+                      onChange={(e) => handleInputChange('groupSize', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-white/90 mb-2">
+                      Accommodation Type
+                    </label>
+                    <select
+                      value={formData.accommodation}
+                      onChange={(e) => handleInputChange('accommodation', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                    >
+                      <option value="hotel">Hotel</option>
+                      <option value="guesthouse">Guesthouse</option>
+                      <option value="resort">Resort</option>
+                      <option value="hostel">Hostel</option>
+                      <option value="mixed">Mixed</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <h2 className="text-3xl font-bold text-white mb-4">Review Your Trip Details</h2>
+                
+                <div className="bg-emerald-50 p-6 rounded-lg space-y-4 border-2 border-emerald-100">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Destination</p>
+                      <p className="font-semibold text-lg">{formData.destination || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Duration</p>
+                      <p className="font-semibold text-lg">{formData.duration || 'Not specified'} days</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Travel Month</p>
+                      <p className="font-semibold text-lg">{formData.visitMonth || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Start Date</p>
+                      <p className="font-semibold text-lg">{formData.startDate || 'Flexible'}</p>
                     </div>
                   </div>
-                )}
+
+                  {formData.interests.length > 0 && (
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2">Interests</p>
+                      <div className="flex flex-wrap gap-2">
+                        {formData.interests.map(interest => (
+                          <span key={interest} className="px-3 py-1 bg-emerald-600 text-white rounded-full text-sm">
+                            {interest.charAt(0).toUpperCase() + interest.slice(1)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-emerald-50 p-6 rounded-lg border-l-4 border-emerald-600">
+                  <h3 className="font-semibold text-gray-800 mb-2">Generated AI Prompt:</h3>
+                  <p className="text-gray-700 italic">{generatePrompt()}</p>
+                </div>
+
+                <button
+                  onClick={generateItinerary}
+                  disabled={isGenerating || !formData.destination || !formData.duration || !formData.visitMonth}
+                  className={`w-full py-4 rounded-lg font-semibold text-white text-lg flex items-center justify-center gap-2 transition-all transform  ${
+                    isGenerating || !formData.destination || !formData.duration || !formData.visitMonth
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : 'bg-emerald-600 hover:bg-emerald-700 shadow-lg'
+                  }`}
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader className="animate-spin" size={24} />
+                      Generating Your Perfect Itinerary...
+                    </>
+                  ) : (
+                    <>
+                      <FileText size={24} />
+                      Generate Detailed Itinerary
+                    </>
+                  )}
+                </button>
               </div>
+            )}
+          </div>
 
-              <div className="bg-blue-50 p-6 rounded-lg border-l-4 border-blue-600">
-                <h3 className="font-semibold text-gray-800 mb-2">Generated AI Prompt:</h3>
-                <p className="text-gray-700 italic">{generatePrompt()}</p>
-              </div>
-
-              <button
-                onClick={generateItinerary}
-                disabled={isGenerating || !formData.destination || !formData.duration || !formData.visitMonth}
-                className={`w-full py-4 rounded-lg font-semibold text-white text-lg flex items-center justify-center gap-2 ${
-                  isGenerating || !formData.destination || !formData.duration || !formData.visitMonth
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700'
-                }`}
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader className="animate-spin" size={24} />
-                    Generating Your Perfect Itinerary...
-                  </>
-                ) : (
-                  <>
-                    <FileText size={24} />
-                    Generate Detailed Itinerary
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-
-          <div className="flex justify-between mt-8 pt-6 border-t">
+                <div className="flex justify-between mt-8 pt-6 border-t">
             <button
-              onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
-              disabled={currentStep === 1}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold ${
-                currentStep === 1
+              onClick={() => animateStepTransition('prev')}
+              disabled={currentStep === 1 || isAnimating}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all transform  ${
+                currentStep === 1 || isAnimating
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-600 text-white hover:bg-gray-700'
+                  : 'bg-gray-600 text-white hover:bg-gray-700 shadow-md'
               }`}
             >
               <ChevronLeft size={20} />
@@ -875,14 +753,14 @@ const TourismItineraryMaker = () => {
 
             {currentStep < 3 && (
               <button
-                onClick={() => setCurrentStep(Math.min(3, currentStep + 1))}
+                onClick={() => animateStepTransition('next')}
                 disabled={
-                  currentStep === 1 && (!formData.destination || !formData.duration || !formData.visitMonth)
+                  (currentStep === 1 && (!formData.destination || !formData.duration || !formData.visitMonth)) || isAnimating
                 }
-                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold ${
-                  currentStep === 1 && (!formData.destination || !formData.duration || !formData.visitMonth)
+                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all transform  ${
+                  (currentStep === 1 && (!formData.destination || !formData.duration || !formData.visitMonth)) || isAnimating
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md'
                 }`}
               >
                 Next
@@ -892,7 +770,10 @@ const TourismItineraryMaker = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+      </div>
+
+
   );
 };
 
