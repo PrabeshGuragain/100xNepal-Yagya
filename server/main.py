@@ -4,6 +4,8 @@ from fastapi.security import HTTPBearer
 from core.config import settings
 from db.database import init_db
 from auth.router import router as auth_router
+from ArLocation.router import router as ar_location_router
+from travel.router import router as travel_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -17,6 +19,7 @@ app = FastAPI(
     - 🔗 Google OAuth Integration
     - 👤 User Management
     - 🔒 JWT Token-based Authorization
+    - ✈️ AI-Powered Travel Planning with LangChain & Gemini
     
     ### Authentication:
     All protected endpoints require a Bearer token in the Authorization header.
@@ -44,15 +47,18 @@ app = FastAPI(
             "name": "general",
             "description": "General application endpoints.",
         },
+        {
+            "name": "ar-locations",
+            "description": "AR Location endpoints.",
+        },
+        {
+            "name": "travel-planning",
+            "description": "AI-powered travel itinerary planning with tool calling capabilities.",
+        },
     ],
 )
 
-# Configure OpenAPI security scheme for Swagger UI
-security_scheme = HTTPBearer(
-    scheme_name="Bearer",
-    bearerFormat="JWT",
-    description="Enter your JWT token. Get one by registering or logging in."
-)
+
 
 app.openapi_schema = None  # Clear the default schema to rebuild it
 
@@ -83,7 +89,7 @@ app.openapi = custom_openapi
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["http://localhost:3000", "http://localhost:8000", "http://localhost:5173", "https://qqp5w08x-5173.inc1.devtunnels.ms"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -91,6 +97,8 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(ar_location_router)
+app.include_router(travel_router)
 
 # Initialize database on startup
 @app.on_event("startup")

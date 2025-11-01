@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
 from auth.models import AuthProvider
@@ -15,6 +15,13 @@ class UserCreate(UserBase):
     """Schema for creating a user"""
     password: str = Field(..., min_length=8, description="Password must be at least 8 characters long")
     
+    @field_validator('password')
+    @classmethod
+    def validate_password_length(cls, v):
+        if len(v.encode('utf-8')) > 72:
+            raise ValueError('Password cannot exceed 72 bytes')
+        return v
+    
     class Config:
         json_schema_extra = {
             "example": {
@@ -24,7 +31,6 @@ class UserCreate(UserBase):
                 "full_name": "John Doe"
             }
         }
-
 
 class UserLogin(BaseModel):
     """Schema for user login"""

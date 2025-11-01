@@ -1,0 +1,187 @@
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from datetime import date, time
+from enum import Enum
+
+
+class TravelType(str, Enum):
+    """Travel type categories"""
+    RELIGIOUS = "religious"
+    CULTURAL = "cultural"
+    NIGHTLIFE = "nightlife"
+    ADVENTURE = "adventure"
+    FAMILY = "family"
+    ROMANTIC = "romantic"
+    BUSINESS = "business"
+    BUDGET = "budget"
+    LUXURY = "luxury"
+    MIXED = "mixed"
+
+
+class TravelPlanRequest(BaseModel):
+    """Request schema for travel planning - matches frontend form fields"""
+    
+    # Required fields
+    destination: str = Field(..., description="Destination location (city, country, region)")
+    duration: int = Field(..., description="Number of days for the trip", gt=0)
+    
+    # Optional fields matching frontend
+    start_date: Optional[str] = Field(None, description="Start date of the trip (YYYY-MM-DD format or flexible)")
+    difficulty_level: Optional[str] = Field(None, description="Difficulty level: easy, moderate, challenging, extreme")
+    budget_range: Optional[str] = Field(None, description="Budget range: budget, moderate, luxury, or custom amount")
+    interests: Optional[str] = Field(None, description="Comma-separated interests: temples, trains, rivers, hiking, food, culture, etc.")
+    group_size: Optional[int] = Field(1, description="Number of people traveling", gt=0)
+    accommodation_type: Optional[str] = Field(None, description="Preferred accommodation: hotel, guest house, hostel, mixed, camping, etc.")
+    
+    # Additional optional fields
+    notes: Optional[str] = Field(None, description="Additional notes or special requirements")
+    
+    class Config:
+        extra = "allow"  # Allow extra fields from frontend for flexibility
+        json_schema_extra = {
+            "example": {
+                "destination": "Pokhara, Nepal",
+                "duration": 5,
+                "start_date": "2025-12-15",
+                "difficulty_level": "moderate",
+                "budget_range": "moderate",
+                "interests": "temples, hiking, lakes, food",
+                "group_size": 2,
+                "accommodation_type": "hotel",
+                "notes": "Prefer mountain views"
+            }
+        }
+
+class Location(BaseModel):
+    """Location information"""
+    name: str = Field(..., description="Name of the location")
+    address: Optional[str] = Field(None, description="Address of the location")
+    latitude: Optional[float] = Field(None, description="Latitude coordinate")
+    longitude: Optional[float] = Field(None, description="Longitude coordinate")
+    rating: Optional[float] = Field(None, ge=0, le=5, description="Average rating (0-5)")
+    review_count: Optional[int] = Field(None, description="Number of reviews")
+    category: Optional[str] = Field(None, description="Category of the location")
+    image_url: Optional[str] = Field(None, description="Image URL for the location (from search)")
+    image_alt: Optional[str] = Field(None, description="Alt text for the image")
+
+
+class Activity(BaseModel):
+    """Activity information"""
+    name: str = Field(..., description="Name of the activity")
+    description: Optional[str] = Field(None, description="Detailed description of the activity")
+    location: Location = Field(..., description="Location details")
+    start_time: Optional[str] = Field(None, description="Start time (HH:MM format)")
+    end_time: Optional[str] = Field(None, description="End time (HH:MM format)")
+    duration_hours: Optional[float] = Field(None, description="Duration in hours")
+    cost_estimate: Optional[str] = Field(None, description="Estimated cost")
+    tips: Optional[List[str]] = Field(None, description="Tips or recommendations")
+    priority: Optional[int] = Field(None, ge=1, le=5, description="Priority ranking (1-5)")
+    image_url: Optional[str] = Field(None, description="Image URL for the activity")
+    booking_info: Optional[str] = Field(None, description="Booking information or website")
+
+
+class DayPlan(BaseModel):
+    """Daily itinerary plan"""
+    day_number: int = Field(..., ge=1, description="Day number")
+    date: Optional[str] = Field(None, description="Date for this day (string format)")
+    title: str = Field(..., description="Title or theme for the day")
+    description: Optional[str] = Field(None, description="Day overview description")
+    theme: Optional[str] = Field(None, description="Theme or focus of the day")
+    activities: List[Activity] = Field(default_factory=list, description="List of activities for the day")
+    estimated_cost: Optional[str] = Field(None, description="Estimated cost for the day")
+    notes: Optional[str] = Field(None, description="Additional notes, tips, or recommendations for the day")
+    highlights: Optional[List[str]] = Field(None, description="Key highlights of the day")
+
+
+class Accommodation(BaseModel):
+    """Accommodation recommendation"""
+    name: str = Field(..., description="Name of accommodation")
+    type: Optional[str] = Field(None, description="Type (hotel, hostel, Airbnb, etc.)")
+    location: Optional[str] = Field(None, description="Location")
+    address: Optional[str] = Field(None, description="Full address")
+    price_range: Optional[str] = Field(None, description="Price range per night")
+    rating: Optional[float] = Field(None, ge=0, le=5, description="Rating")
+    review_count: Optional[int] = Field(None, description="Number of reviews")
+    recommendation_reason: Optional[str] = Field(None, description="Why this is recommended")
+    image_url: Optional[str] = Field(None, description="Image URL for the accommodation")
+    amenities: Optional[List[str]] = Field(None, description="List of amenities")
+    booking_url: Optional[str] = Field(None, description="Booking website URL")
+
+
+class Transportation(BaseModel):
+    """Transportation information"""
+    type: str = Field(..., description="Type of transportation")
+    route: Optional[str] = Field(None, description="Route description")
+    estimated_cost: Optional[str] = Field(None, description="Estimated cost")
+    duration: Optional[str] = Field(None, description="Estimated duration")
+    tips: Optional[List[str]] = Field(None, description="Tips for transportation")
+
+
+class ItineraryReport(BaseModel):
+    """Complete itinerary report - Strictly validated output"""
+    summary: str = Field(..., description="Comprehensive summary of the travel plan")
+    destination: str = Field(..., description="Destination name")
+    total_days: int = Field(..., ge=1, description="Total number of days")
+    travel_type: Optional[str] = Field(None, description="Type of travel")
+    budget_estimate: Optional[str] = Field(None, description="Total estimated budget")
+    
+    # Detailed day plans - required and validated
+    day_plans: List[DayPlan] = Field(..., min_length=1, description="Detailed daily itinerary plans")
+    
+    # Attractions and locations
+    top_attractions: Optional[List[Location]] = Field(None, description="Top ranked attractions with details")
+    must_visit_places: Optional[List[Location]] = Field(None, description="Must-visit places")
+    
+    # Accommodation
+    accommodation_recommendations: Optional[List[Accommodation]] = Field(None, description="Accommodation suggestions with details")
+    
+    # Transportation
+    transportation_tips: Optional[List[Transportation]] = Field(None, description="Transportation recommendations")
+    local_transport: Optional[str] = Field(None, description="Information about local transportation")
+    
+    # Additional information
+    general_tips: Optional[List[str]] = Field(None, description="General travel tips and advice")
+    cultural_notes: Optional[List[str]] = Field(None, description="Cultural information and customs")
+    best_time_to_visit: Optional[str] = Field(None, description="Best time to visit")
+    weather_info: Optional[str] = Field(None, description="Weather information for the destination")
+    
+    # Images and media
+    destination_image: Optional[str] = Field(None, description="Main destination image URL")
+    cover_image: Optional[str] = Field(None, description="Cover image URL for the itinerary")
+    
+    # Metadata
+    created_at: Optional[str] = Field(None, description="Report creation timestamp")
+    last_updated: Optional[str] = Field(None, description="Last update timestamp")
+    
+    # Markdown description for frontend rendering
+    markdown_description: Optional[str] = Field(None, description="Formatted markdown description of the itinerary for frontend display")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "summary": "A comprehensive 5-day cultural journey through Paris, France",
+                "destination": "Paris",
+                "total_days": 5,
+                "travel_type": "cultural",
+                "budget_estimate": "€800-1200",
+                "day_plans": [
+                    {
+                        "day_number": 1,
+                        "title": "Arrival and City Introduction",
+                        "description": "Explore the historic heart of Paris",
+                        "activities": []
+                    }
+                ],
+                "top_attractions": [],
+                "general_tips": ["Learn basic French phrases", "Get a Paris Museum Pass"]
+            }
+        }
+
+
+class TravelPlanResponse(BaseModel):
+    """Response schema for travel planning"""
+    success: bool = Field(..., description="Whether the plan generation was successful")
+    itinerary: Optional[ItineraryReport] = Field(None, description="Generated itinerary")
+    message: Optional[str] = Field(None, description="Status message")
+    processing_time: Optional[float] = Field(None, description="Processing time in seconds")
+

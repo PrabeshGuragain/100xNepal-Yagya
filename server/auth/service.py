@@ -18,6 +18,7 @@ class AuthService:
     @staticmethod
     def register_user(db: Session, user_create: UserCreate) -> User:
         """Register a new user with email/password"""
+        print(f"DEBUG - Password length: {len(user_create.password)} chars, {len(user_create.password.encode('utf-8'))} bytes")
         # Check if user already exists
         existing_user = db.query(User).filter(User.email == user_create.email).first()
         if existing_user:

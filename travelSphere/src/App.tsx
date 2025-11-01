@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import './App.css'
 import Home from './pages/home'
+import ArLocationMap from './pages/ArLocationMap.tsx'
+import AddArLocation from './pages/AddPlace.tsx'
 
 
 function NotFound() {
@@ -20,6 +22,8 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/ar-location-map" element={<ArLocationMap />} />
+        <Route path="/add-place" element={<AddArLocation />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>

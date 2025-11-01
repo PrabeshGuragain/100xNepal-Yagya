@@ -6,7 +6,7 @@ from auth.service import AuthService
 from auth.models import User
 from core.security import decode_access_token
 
-security = HTTPBearer()
+security = HTTPBearer(scheme_name="Bearer")
 
 
 async def get_current_user(
