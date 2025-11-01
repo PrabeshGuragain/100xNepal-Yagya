@@ -226,7 +226,11 @@ def get_local_customs_tips(location: str) -> str:
         Formatted string with local customs and tips
     """
     try:
-        from duckduckgo_search import DDGS
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            # Fallback for old package name
+            from duckduckgo_search import DDGS
         
         query = f"{location} local customs etiquette culture tips travelers"
         
@@ -244,4 +248,62 @@ def get_local_customs_tips(location: str) -> str:
             return "\n---\n".join(tips[:3])
     except Exception as e:
         return f"Error getting local customs: {str(e)}"
+
+
+@tool
+def get_place_coordinates(place_name: str, location: Optional[str] = None) -> str:
+    """
+    Get latitude and longitude coordinates for a place using OpenStreetMap geocoding.
+    
+    Args:
+        place_name: Name of the place (e.g., "Eiffel Tower", "Louvre Museum")
+        location: Optional city/country context to help narrow down the location
+    
+    Returns:
+        Formatted string with coordinates: "latitude,longitude" or "lat,lon" format
+        Example: "48.8584,2.2945"
+    """
+    try:
+        # Build search query
+        if location:
+            query = f"{place_name}, {location}"
+        else:
+            query = place_name
+        
+        # Use Nominatim (OpenStreetMap) geocoding API
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            "q": query,
+            "format": "json",
+            "limit": 1,
+            "addressdetails": 1
+        }
+        headers = {
+            "User-Agent": "TravelPlanner/1.0"  # Required by Nominatim
+        }
+        
+        # Rate limiting - Nominatim requires delays
+        time.sleep(1)  # Be respectful to the free service
+        
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data and len(data) > 0:
+                result = data[0]
+                lat = result.get("lat")
+                lon = result.get("lon")
+                
+                if lat and lon:
+                    # Return coordinates as "lat,lon" format
+                    return f"{lat},{lon}"
+                else:
+                    return f"Coordinates not found for {place_name}"
+            else:
+                return f"No results found for {place_name}"
+        else:
+            return f"Geocoding API error: {response.status_code}"
+            
+    except Exception as e:
+        return f"Error getting coordinates: {str(e)}"
 

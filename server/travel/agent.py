@@ -41,7 +41,8 @@ from travel.tools import (
     compare_prices,
     rank_attractions_by_category,
     get_weather_info,
-    get_local_customs_tips
+    get_local_customs_tips,
+    get_place_coordinates
 )
 from travel.output_parser import TravelItineraryParser, get_itinerary_prompt_template
 import os
@@ -154,6 +155,9 @@ class SimpleToolAgent:
         except:
             pass
         
+        # 5. Note about coordinates - will be added post-processing
+        tool_results.append("\nNote: Coordinates will be automatically fetched for all places in the final itinerary.")
+        
         # Combine tool results
         tool_output = "\n".join(tool_results)
         
@@ -205,7 +209,8 @@ def create_travel_agent(llm: Optional[ChatGoogleGenerativeAI] = None):
         compare_prices,
         rank_attractions_by_category,
         get_weather_info,
-        get_local_customs_tips
+        get_local_customs_tips,
+        get_place_coordinates
     ]
     
     # Try to use AgentExecutor if available

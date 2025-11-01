@@ -3,7 +3,7 @@ from travel.schemas import TravelPlanRequest, ItineraryReport, TravelPlanRespons
 from travel.agent import create_itinerary_agent_with_parser, get_gemini_llm
 from travel.output_parser import get_itinerary_prompt_template
 import time
-from typing import Optional
+from typing import Optional, Tuple
 import json
 
 
@@ -85,6 +85,9 @@ Make sure to use the information gathered from the tools to create accurate and 
             
             # Parse the output
             itinerary = self.parser.parse(llm_output)
+            
+            # Enrich locations with coordinates if missing
+            itinerary = await self._enrich_with_coordinates(itinerary, request.destination)
             
             # Generate markdown description using rule-based method
             itinerary.markdown_description = self._generate_markdown_description(itinerary)
@@ -329,6 +332,69 @@ Use all available tools to gather comprehensive information about {destination}.
             md_parts.append(f"{itinerary.best_time_to_visit}\n\n")
         
         return "".join(md_parts)
+    
+    async def _enrich_with_coordinates(self, itinerary: ItineraryReport, destination: str) -> ItineraryReport:
+        """
+        Enrich itinerary locations with coordinates if missing
+        
+        Args:
+            itinerary: ItineraryReport object
+            destination: Destination city for context
+            
+        Returns:
+            Enriched ItineraryReport
+        """
+        from travel.tools import get_place_coordinates
+        import time
+        
+        # Helper function to get coordinates
+        def get_coords(place_name: str, address: Optional[str] = None) -> Tuple[Optional[float], Optional[float]]:
+            """Get coordinates for a place"""
+            try:
+                query = place_name
+                if address and destination:
+                    query = f"{place_name}, {destination}"
+                
+                coords_str = get_place_coordinates.invoke(query)
+                if coords_str and "," in coords_str:
+                    try:
+                        lat, lon = coords_str.split(",")
+                        return float(lat.strip()), float(lon.strip())
+                    except ValueError:
+                        pass
+            except Exception:
+                pass
+            return None, None
+        
+        # Enrich day plans activities
+        for day_plan in itinerary.day_plans:
+            for activity in day_plan.activities:
+                if activity.location and not activity.location.latitude:
+                    lat, lon = get_coords(activity.location.name, activity.location.address)
+                    if lat and lon:
+                        activity.location.latitude = lat
+                        activity.location.longitude = lon
+                    time.sleep(0.5)  # Rate limiting
+        
+        # Enrich top attractions
+        for attraction in (itinerary.top_attractions or []):
+            if not attraction.latitude:
+                lat, lon = get_coords(attraction.name, attraction.address)
+                if lat and lon:
+                    attraction.latitude = lat
+                    attraction.longitude = lon
+                time.sleep(0.5)
+        
+        # Enrich must visit places
+        for place in (itinerary.must_visit_places or []):
+            if not place.latitude:
+                lat, lon = get_coords(place.name, place.address)
+                if lat and lon:
+                    place.latitude = lat
+                    place.longitude = lon
+                time.sleep(0.5)
+        
+        return itinerary
 
 
 # Singleton instance

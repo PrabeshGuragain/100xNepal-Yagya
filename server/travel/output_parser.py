@@ -37,6 +37,9 @@ class TravelItineraryParser:
             else:
                 data = text
             
+            # Normalize ratings from 0-10 scale to 0-5 scale if needed
+            data = self._normalize_ratings(data)
+            
             # Validate and create ItineraryReport
             return ItineraryReport(**data)
         except json.JSONDecodeError as e:
@@ -44,10 +47,63 @@ class TravelItineraryParser:
             json_str = self._extract_json_from_text(text)
             if json_str:
                 data = json.loads(json_str)
+                data = self._normalize_ratings(data)
                 return ItineraryReport(**data)
             raise ValueError(f"Failed to parse JSON from output: {str(e)}")
         except Exception as e:
             raise ValueError(f"Failed to parse itinerary: {str(e)}")
+    
+    def _normalize_ratings(self, data: dict) -> dict:
+        """
+        Normalize ratings from 0-10 scale to 0-5 scale
+        
+        Args:
+            data: Dictionary containing itinerary data
+            
+        Returns:
+            Dictionary with normalized ratings
+        """
+        if not isinstance(data, dict):
+            return data
+        
+        data = data.copy()
+        
+        # Normalize ratings in day_plans -> activities -> location
+        if "day_plans" in data:
+            for day_plan in data["day_plans"]:
+                if "activities" in day_plan:
+                    for activity in day_plan["activities"]:
+                        if "location" in activity and activity["location"]:
+                            if "rating" in activity["location"] and activity["location"]["rating"] is not None:
+                                rating = activity["location"]["rating"]
+                                if rating > 5:
+                                    activity["location"]["rating"] = round(rating / 2, 1)
+        
+        # Normalize ratings in top_attractions
+        if "top_attractions" in data and data["top_attractions"]:
+            for attraction in data["top_attractions"]:
+                if "rating" in attraction and attraction["rating"] is not None:
+                    rating = attraction["rating"]
+                    if rating > 5:
+                        attraction["rating"] = round(rating / 2, 1)
+        
+        # Normalize ratings in must_visit_places
+        if "must_visit_places" in data and data["must_visit_places"]:
+            for place in data["must_visit_places"]:
+                if "rating" in place and place["rating"] is not None:
+                    rating = place["rating"]
+                    if rating > 5:
+                        place["rating"] = round(rating / 2, 1)
+        
+        # Normalize ratings in accommodation_recommendations
+        if "accommodation_recommendations" in data and data["accommodation_recommendations"]:
+            for acc in data["accommodation_recommendations"]:
+                if "rating" in acc and acc["rating"] is not None:
+                    rating = acc["rating"]
+                    if rating > 5:
+                        acc["rating"] = round(rating / 2, 1)
+        
+        return data
     
     def _extract_json(self, text: str) -> str:
         """Extract JSON from text that might have markdown formatting"""
@@ -107,15 +163,19 @@ IMPORTANT OUTPUT REQUIREMENTS:
   - activities: List of activities, each with:
     - name: Activity name
     - description: Detailed description
-    - location: Location object with name, address, rating, image_url
+    - location: Location object with name, address, rating, image_url, latitude, longitude
     - start_time and end_time: Time slots
     - cost_estimate: Estimated cost
     - image_url: Image URL if found from search
 
 - top_attractions: List of top places with:
-  - name, address, rating, review_count
+  - name, address, rating, review_count, latitude, longitude
   - image_url: Image URL from search results
   - category: Type of attraction
+
+- must_visit_places: List with:
+  - name, address, rating, latitude, longitude
+  - image_url: Image URL if available
 
 - accommodation_recommendations: List with:
   - name, type, location, price_range, rating
@@ -125,6 +185,13 @@ IMPORTANT OUTPUT REQUIREMENTS:
 - Include destination_image and cover_image URLs if found
 - Include weather_info and cultural_notes
 - Provide detailed general_tips and transportation_tips
+
+CRITICAL RULES:
+1. For all locations, places, and attractions, you MUST include latitude and longitude coordinates.
+   Use the get_place_coordinates tool to get accurate coordinates for each place before finalizing the itinerary.
+
+2. ALL RATINGS MUST BE ON A 0-5 SCALE (not 0-10). If you find ratings on a 0-10 scale, divide by 2.
+   Example: If a place has 8.9/10 rating, convert it to 4.5/5.
 
 Output Format:
 {format_instructions}
